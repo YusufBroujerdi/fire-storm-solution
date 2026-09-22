@@ -23,6 +23,7 @@
 //common buffer size for sending / receiving bytes
 #define BUFFER_SIZE 1024
 
+//The 32 byte integer corresponding to CTFS ()
 
 
 //Struct to abstract away receiving data through socket
@@ -48,7 +49,7 @@ struct SendSocket {
 //Struct will be helpful in reordering PDF packets later on
 struct PdfFragment {
   char *payload;
-  uint16_t length;
+  char *terminal_byte;
   uint16_t sequence_number;
 };
 
@@ -62,6 +63,15 @@ struct PdfFragmentHandler {
   uint64_t fragments_size;
   uint64_t payload_storage_index;
   uint64_t fragment_index;
+};
+
+
+
+//Tracks recent bytes received so we can check for matches with "CTFS". Note
+//the length member to track how many bytes are currently stored.
+struct LastFourBytes {
+  char bytes[4];
+  char length;
 };
 
 
@@ -420,6 +430,11 @@ void quicksort_fragments(
   uint32_t pivot_index, last_index, next_low, length_of_low, length_of_high;
   struct PdfFragment tmp, *address_of_high;
 
+  if (length == 0) {
+    printf("This function should never be called on length 0");
+    exit(-1);
+  }
+
   //Since this algorithm is recursive, a base case is needed to ensure recursion
   //terminates at the leaves
   if (length == 1) {
@@ -475,6 +490,7 @@ void assemble_pdf_from_fragments(struct PdfFragmentHandler *fragment_handler) {
 
   FILE *file;
   struct PdfFragment *fragment;
+  char * byte;
 
   //Sort fragments by sequence number.
   quicksort_fragments(
@@ -494,7 +510,7 @@ void assemble_pdf_from_fragments(struct PdfFragmentHandler *fragment_handler) {
     fragment < fragment_handler->fragments + fragment_handler->fragment_index;
     fragment++
   ) {
-    for(char *byte = fragment->payload; *byte != '\0'; byte++) {
+    for(byte = fragment->payload; byte != fragment->terminal_byte; byte++) {
       if (fputc(*byte, file) == EOF) {
         printf("Failed to write char to file.\n");
         exit(-1);
@@ -505,28 +521,37 @@ void assemble_pdf_from_fragments(struct PdfFragmentHandler *fragment_handler) {
 
 
 
+void initialize_last_four_bytes(struct LastFourBytes *last_four_bytes) {
+  last_four_bytes->length = 0;
+}
+
 
 
 //Given a received byte, deduces whether last four bytes were CTFS and if a byte
 //needs to be sent through the send socket.
-struct ByteCheckResult check_byte(char *last_four_bytes, char byte) {
+struct ByteCheckResult check_byte(struct LastFourBytes *last_four_bytes, char byte) {
 
   char length;
   struct ByteCheckResult result;
 
   //If there's already four bytes, the first byte must be sent and space must
   //be made for the new byte. Either way, new byte is appended to last_four_bytes.
-  if ((length = strlen(last_four_bytes)) == 4) {
-    result.byte_to_send = last_four_bytes[0];
-    memmove(last_four_bytes, last_four_bytes + 1, 3);
+  if (last_four_bytes->length == 4) {
+    result.byte_to_send = last_four_bytes->bytes[0];
+    memmove(last_four_bytes->bytes, last_four_bytes->bytes + 1, 3);
+    last_four_bytes->bytes[3] = byte;
   }
-  else
+  else {
     result.byte_to_send = EOF;
-  last_four_bytes[length] = byte;
+    last_four_bytes->bytes[last_four_bytes->length++] = byte;
+  }
 
-  if (strcmp(last_four_bytes, "CTFS") == 0) {
+  if (
+    last_four_bytes->length == 4
+    && memcmp(last_four_bytes->bytes, "CTFS", 4) == 0
+  ) {
     result.packet_found = 1;
-    memset(last_four_bytes, '\0', 4);
+    last_four_bytes->length = 0;
   }
   else
     result.packet_found = 0;
@@ -567,6 +592,7 @@ void extract_packet(
   new_fragment = handler->fragments + handler->fragment_index++;
   new_fragment->sequence_number = sequence_number;
   new_fragment->payload = handler->payload_storage + handler->payload_storage_index;
+  new_fragment->terminal_byte = new_fragment->payload + length;
 
   for (uint16_t n = 0; n < length; n++) {
 
@@ -577,9 +603,6 @@ void extract_packet(
     next_byte = get_non_EOF_byte(byte_stream);
     handler->payload_storage[handler->payload_storage_index++] = next_byte;
   }
-
-  //Make sure to terminate string once it is copied.
-  handler->payload_storage[handler->payload_storage_index++] = '\0';
 }
 
 
@@ -590,20 +613,20 @@ void get_pdf_file() {
   struct SendSocket sending_socket;
   struct PdfFragmentHandler fragment_handler;
   struct ByteCheckResult byte_check_result;
-  char last_four_bytes[5], byte;
+  struct LastFourBytes last_four_bytes;
+  int byte, counter = 0;
 
   receiving_socket = initialize_receiving_socket();
   sending_socket = initialize_sending_socket();
   fragment_handler = initialize_fragment_handler();
-  memset(last_four_bytes, '\0', 5);
-
-  byte = get_byte(&receiving_socket);
 
   printf("Byte successfully read!\n");
 
   while (byte != EOF) {
 
-    byte_check_result = check_byte(last_four_bytes, byte);
+    counter++;
+
+    byte_check_result = check_byte(&last_four_bytes, byte);
 
     if (byte_check_result.byte_to_send != EOF)
       send_byte(&sending_socket, (char) byte_check_result.byte_to_send);
@@ -614,8 +637,8 @@ void get_pdf_file() {
     byte = get_byte(&receiving_socket);
   }
 
-  for (char *byte = last_four_bytes; *byte != '\0'; byte++) {
-    send_byte(&sending_socket, *byte);
+  for (char index = 0; index < last_four_bytes.length; index++) {
+    send_byte(&sending_socket, last_four_bytes.bytes[index]);
   }
 
   assemble_pdf_from_fragments(&fragment_handler);
