@@ -32,14 +32,14 @@ struct RecvSocket {
   int client_fd;
   uint32_t buffer_index;
   uint32_t buffer_end_index;
-  char *buffer;
+  unsigned char *buffer;
 };
 
 
 
 //Struct to abstract away sending data through socket
 struct SendSocket {
-  char *buffer;
+  unsigned char *buffer;
   int socket_fd;
   uint32_t buffer_index;
 };
@@ -48,8 +48,8 @@ struct SendSocket {
 
 //Struct will be helpful in reordering PDF packets later on
 struct PdfFragment {
-  char *payload;
-  char *terminal_byte;
+  unsigned char *payload;
+  unsigned char *terminal_byte;
   uint16_t sequence_number;
 };
 
@@ -57,7 +57,7 @@ struct PdfFragment {
 
 //An interface for managing fragments and their payloads
 struct PdfFragmentHandler {
-  char *payload_storage;
+  unsigned char *payload_storage;
   struct PdfFragment *fragments;
   uint64_t payload_storage_size;
   uint64_t fragments_size;
@@ -70,8 +70,8 @@ struct PdfFragmentHandler {
 //Tracks recent bytes received so we can check for matches with "CTFS". Note
 //the length member to track how many bytes are currently stored.
 struct LastFourBytes {
-  char bytes[4];
-  char length;
+  unsigned char bytes[4];
+  unsigned char length;
 };
 
 
@@ -87,7 +87,8 @@ struct ByteCheckResult{
 
 struct RecvSocket initialize_receiving_socket() {
 
-  char bind_check, listen_check, *buffer;
+  unsigned char *buffer;
+  char bind_check, listen_check;
   int socket_fd, client_fd;
   struct RecvSocket receiving_socket;
 
@@ -95,9 +96,9 @@ struct RecvSocket initialize_receiving_socket() {
   //addresses. This struct is later cast as the "polymorphic" sockaddr.
   struct sockaddr_in recv_address = {
     .sin_family  =  AF_INET,
-    .sin_addr    =  LOOPBACK_IP,
+    .sin_addr    =  {LOOPBACK_IP},
     .sin_port    =  RECV_PORT,
-    .sin_zero    =  0
+    .sin_zero    =  {0}
   };
 
   //Specifies we want a tcp, ipv4 socket.
@@ -157,7 +158,8 @@ struct RecvSocket initialize_receiving_socket() {
 
 struct SendSocket initialize_sending_socket() {
 
-  char connect_check, *buffer;
+  unsigned char *buffer;
+  char connect_check;
   int socket_fd;
   struct timespec start_time, current_time, tenth_second;
   struct SendSocket sending_socket;
@@ -171,9 +173,9 @@ struct SendSocket initialize_sending_socket() {
 
   struct sockaddr_in send_address = {
     .sin_family  =  AF_INET,
-    .sin_addr    =  LOOPBACK_IP,
+    .sin_addr    =  {LOOPBACK_IP},
     .sin_port    =  SEND_PORT,
-    .sin_zero    =  0
+    .sin_zero    =  {0}
   };
 
   //Below call should never error with valid clock id, according to man page
@@ -260,14 +262,14 @@ int get_byte(struct RecvSocket *receiving_socket) {
   }
 
   //Return char from reading buffer and increment buffer index.
-  return receiving_socket->buffer[receiving_socket->buffer_index++];
+  return (int) receiving_socket->buffer[receiving_socket->buffer_index++];
 }
 
 
 
 //Helper function for situations where the stream must not end.
 //(like while reading a CTFS packet)
-char get_non_EOF_byte(struct RecvSocket *receiving_socket) {
+unsigned char get_non_EOF_byte(struct RecvSocket *receiving_socket) {
 
   int candidate_byte;
 
@@ -275,17 +277,17 @@ char get_non_EOF_byte(struct RecvSocket *receiving_socket) {
     printf("Unexpected EOF while reading stream.\n");
     exit(-1);
   }
-  return (char) candidate_byte;
+  return (unsigned char) candidate_byte;
 }
 
 
 
-void send_byte(struct SendSocket *sending_socket, char byte_to_send) {
+void send_byte(struct SendSocket *sending_socket, unsigned char byte_to_send) {
 
-  char *starting_byte;
+  unsigned char *starting_byte;
   int16_t bytes_sent, bytes_to_send;
 
-  //If buffer is full, keep trying to send chars until all are sent.
+  //If buffer is full, keep trying to send bytes until all are sent.
   //Mimics python's "sendall" method. May have performance cost?
   if (sending_socket->buffer_index == BUFFER_SIZE) {
     starting_byte = sending_socket->buffer;
@@ -320,7 +322,7 @@ void cleanup_receiving_socket(struct RecvSocket *receiving_socket) {
 //Send remaining bytes, in addition to freeing buffer and closing socket.
 void cleanup_sending_socket(struct SendSocket *sending_socket) {
 
-  char *starting_byte;
+  unsigned char *starting_byte;
   int16_t bytes_sent, bytes_to_send;
 
   starting_byte = sending_socket->buffer;
@@ -342,7 +344,7 @@ void cleanup_sending_socket(struct SendSocket *sending_socket) {
 
 struct PdfFragmentHandler initialize_fragment_handler() {
 
-  char *payload_storage;
+  unsigned char *payload_storage;
   struct PdfFragment *fragments;
   uint64_t payload_storage_size, fragments_size;
 
@@ -379,7 +381,7 @@ struct PdfFragmentHandler initialize_fragment_handler() {
 
 void extend_payload_storage(struct PdfFragmentHandler *fragment_handler) {
 
-  char *new_payload_storage;
+  unsigned char *new_payload_storage;
   
   new_payload_storage = realloc(
     fragment_handler->payload_storage,
@@ -426,7 +428,6 @@ void quicksort_fragments(
   uint32_t length
 ) {
 
-  char comparison;
   uint32_t pivot_index, last_index, next_low, length_of_low, length_of_high;
   struct PdfFragment tmp, *address_of_high;
 
@@ -490,7 +491,7 @@ void assemble_pdf_from_fragments(struct PdfFragmentHandler *fragment_handler) {
 
   FILE *file;
   struct PdfFragment *fragment;
-  char * byte;
+  unsigned char *byte;
 
   //Sort fragments by sequence number.
   quicksort_fragments(
@@ -504,7 +505,7 @@ void assemble_pdf_from_fragments(struct PdfFragmentHandler *fragment_handler) {
     exit(-1);
   }
 
-  //For each fragment, for each char in fragment payload, put char in file.
+  //For each fragment, for each byte in fragment payload, put byte in file.
   for(
     fragment = fragment_handler->fragments;
     fragment < fragment_handler->fragments + fragment_handler->fragment_index;
@@ -512,7 +513,7 @@ void assemble_pdf_from_fragments(struct PdfFragmentHandler *fragment_handler) {
   ) {
     for(byte = fragment->payload; byte != fragment->terminal_byte; byte++) {
       if (fputc(*byte, file) == EOF) {
-        printf("Failed to write char to file.\n");
+        printf("Failed to write byte to file.\n");
         exit(-1);
       }
     }
@@ -529,9 +530,11 @@ void initialize_last_four_bytes(struct LastFourBytes *last_four_bytes) {
 
 //Given a received byte, deduces whether last four bytes were CTFS and if a byte
 //needs to be sent through the send socket.
-struct ByteCheckResult check_byte(struct LastFourBytes *last_four_bytes, char byte) {
+struct ByteCheckResult check_byte(
+  struct LastFourBytes *last_four_bytes,
+  unsigned char byte
+) {
 
-  char length;
   struct ByteCheckResult result;
 
   //If there's already four bytes, the first byte must be sent and space must
@@ -567,7 +570,7 @@ void extract_packet(
   struct RecvSocket *byte_stream
 ) {
 
-  char sequence_byte[2], length_byte[2], next_byte;
+  unsigned char sequence_byte[2], length_byte[2], next_byte;
   uint16_t sequence_number, length;
   struct PdfFragment *new_fragment;
 
@@ -629,7 +632,7 @@ void get_pdf_file() {
     byte_check_result = check_byte(&last_four_bytes, byte);
 
     if (byte_check_result.byte_to_send != EOF)
-      send_byte(&sending_socket, (char) byte_check_result.byte_to_send);
+      send_byte(&sending_socket, (unsigned char) byte_check_result.byte_to_send);
 
     if (byte_check_result.packet_found)
       extract_packet(&fragment_handler, &receiving_socket);
@@ -637,7 +640,7 @@ void get_pdf_file() {
     byte = get_byte(&receiving_socket);
   }
 
-  for (char index = 0; index < last_four_bytes.length; index++) {
+  for (unsigned char index = 0; index < last_four_bytes.length; index++) {
     send_byte(&sending_socket, last_four_bytes.bytes[index]);
   }
 
