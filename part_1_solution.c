@@ -431,14 +431,9 @@ void quicksort_fragments(
   uint32_t pivot_index, last_index, next_low, length_of_low, length_of_high;
   struct PdfFragment tmp, *address_of_high;
 
-  if (length == 0) {
-    printf("This function should never be called on length 0");
-    exit(-1);
-  }
-
   //Since this algorithm is recursive, a base case is needed to ensure recursion
   //terminates at the leaves
-  if (length == 1) {
+  if (length == 1 || length == 0) {
     return;
   }
 
@@ -455,7 +450,7 @@ void quicksort_fragments(
   //Rearrange fragments with those lower than index together on the left
   //so those fragments higher will end up together on the right.
   next_low = 0;
-  for (uint32_t i; i < last_index; i++) {
+  for (uint32_t i = 0; i < last_index; i++) {
     //Ensure i is placed on the low side if less than pivot
     if (fragments[i].sequence_number < fragments[last_index].sequence_number) {
       //Switch fragment in next available low slot with i
@@ -499,7 +494,7 @@ void assemble_pdf_from_fragments(struct PdfFragmentHandler *fragment_handler) {
     fragment_handler->fragment_index
   );
 
-  file = fopen("decoded_file.pdf", "w");
+  file = fopen("test", "w");
   if (file == NULL) {
     printf("Failed to open file to put pdf.\n");
     exit(-1);
@@ -518,6 +513,8 @@ void assemble_pdf_from_fragments(struct PdfFragmentHandler *fragment_handler) {
       }
     }
   }
+
+  fclose(file);
 }
 
 
