@@ -615,17 +615,13 @@ void get_pdf_file() {
   struct PdfFragmentHandler fragment_handler;
   struct ByteCheckResult byte_check_result;
   struct LastFourBytes last_four_bytes;
-  int byte, counter = 0;
+  int byte;
 
   receiving_socket = initialize_receiving_socket();
   sending_socket = initialize_sending_socket();
   fragment_handler = initialize_fragment_handler();
 
-  printf("Byte successfully read!\n");
-
   while (byte != EOF) {
-
-    counter++;
 
     byte_check_result = check_byte(&last_four_bytes, byte);
 
