@@ -302,6 +302,7 @@ void send_byte(struct SendSocket *sending_socket, unsigned char byte_to_send) {
       bytes_to_send -= bytes_sent;
       starting_byte += bytes_sent;
     }
+    sending_socket->buffer_index = 0;
   }
 
   //Add byte to send to buffer and increment buffer index.
