@@ -495,7 +495,7 @@ void assemble_pdf_from_fragments(struct PdfFragmentHandler *fragment_handler) {
     fragment_handler->fragment_index
   );
 
-  file = fopen("test", "w");
+  file = fopen("part_1.pdf", "w");
   if (file == NULL) {
     printf("Failed to open file to put pdf.\n");
     exit(-1);
@@ -520,8 +520,10 @@ void assemble_pdf_from_fragments(struct PdfFragmentHandler *fragment_handler) {
 
 
 
-void initialize_last_four_bytes(struct LastFourBytes *last_four_bytes) {
-  last_four_bytes->length = 0;
+struct LastFourBytes initialize_last_four_bytes() {
+  struct LastFourBytes last_four_bytes;
+  memset(&last_four_bytes, 0, sizeof(last_four_bytes));
+  return last_four_bytes;
 }
 
 
@@ -620,6 +622,9 @@ void get_pdf_file() {
   receiving_socket = initialize_receiving_socket();
   sending_socket = initialize_sending_socket();
   fragment_handler = initialize_fragment_handler();
+  last_four_bytes = initialize_last_four_bytes();
+
+  byte = get_byte(&receiving_socket);
 
   while (byte != EOF) {
 
