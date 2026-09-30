@@ -2,6 +2,22 @@ import socket
 import time
 
 
+malicious_mac_address_starts = (
+    b'\x00\x0C\x29',
+    b'\x00\x50\x56',
+    b'\x00\x1C\x14'
+)
+
+monitoring_mac_address_starts = (
+    b'\x00\x1A\xA0',
+    b'\x00\x1E\xC9',
+    b'\x00\x15\x5D'
+)
+
+monitoring_port = 5745
+tcp_port = 5744
+udp_port = 5746
+
 
 #Class to hold information about individual sending socket
 class SendSocket:
@@ -78,7 +94,7 @@ class SocketHandler:
     #Perform socket cleanup
     def __del__(self):
 
-        #Make sure remaining bytes are sent from buffer when program ends.
+        #Make sure remaining bytes are sent from all buffers when program ends.
         for sending_socket in self._socket_send.values():
             if len(sending_socket.buffer) > 0:
                 sending_socket.object.sendall(bytes(sending_socket.buffer))
@@ -139,6 +155,47 @@ class CtfsChecker:
     def __del__(self):
         if self.last_four_bytes != b'':
             raise Exception("You need to empty ctfs_checker of bytes")
+
+
+
+def deduce_sending_ports(byte_stream : SocketHandler):
+
+    sending_ports = []
+
+    #Get first byte of 6 byte destination mac address
+    destination_mac_address = byte_stream.get_byte()
+    #Get the other 5 bytes
+    for i in range(0, 5):
+        destination_mac_address += byte_stream.get_byte()
+
+    #Get first byte of 6 byte source mac address
+    source_mac_address = byte_stream.get_byte()
+    #Get the other 5 bytes
+    for i in range(0, 5):
+        source_mac_address += byte_stream.get_byte()
+
+    #If packet is going to a monitoring address, it should unconditionally
+    #be sent to monitoring port in addition to usual ports
+    if any(
+        [destination_mac_address[:3] == address_start
+        for address_start in monitoring_mac_address_starts]
+    ):
+        sending_ports.append(monitoring_port)
+
+    #If traffic is not from a malicious address, we can send it to the usual ports.
+    if all(
+        [source_mac_address[:3] != address_start
+        for address_start in malicious_mac_address_starts]
+    ):
+        #For the time being, I'll assume all traffic is tcp traffic
+        sending_ports.append(tcp_port)
+
+    #Before exiting function, send the bytes used to deduce ports.
+    for sending_port in sending_ports:
+        for byte in destination_mac_address + source_mac_address:
+            byte_stream.send_byte(byte, sending_port)
+
+    return sending_ports
 
     
 #returns a CTFS packet, having confirmed the previous four bytes were a
