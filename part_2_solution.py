@@ -3,32 +3,44 @@ import time
 
 
 
+#Class to hold information about individual sending socket
+class SendSocket:
+    def __init__(self, socket_send):
+        self.object = socket_send
+        self.buffer = bytearray()
+
 #Class to abstract away reading and writing to sockets.
 class SocketHandler:
 
     #Initialize receiving and sending sockets, as well as buffers.
-    def __init__(self, ip = '127.0.0.1', recv_port = 5733, send_port = 5744):
+    def __init__(self, ip = '127.0.0.1', recv_port = 5733, send_ports = [5744, 5745, 5746]):
 
         #initialize receiving socket
         self._socket_recv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket_recv.bind((ip, recv_port))
         self._socket_recv.listen()
         self._client_recv, _ = self._socket_recv.accept()
+        self._socket_send = dict()
 
         #initialize sending socket
-        self._socket_send = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        timeout_start = time.time()
-        while True:
-            time.sleep(0.1)
-            try:
-                self._socket_send.connect((ip, send_port))
-                break
-            except ConnectionRefusedError:
-                if time.time() - timeout_start > 5:
-                    raise Exception("Timeout while connecting to client socket")
+        for send_port in send_ports:
 
-        #initialize_buffers
-        self._buffer_send = bytearray()
+            self._socket_send[send_port] = SendSocket(
+                socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            )
+            sending_socket = self._socket_send[send_port]
+
+            timeout_start = time.time()
+            while True:
+                time.sleep(0.1)
+                try:
+                    sending_socket.object.connect((ip, send_port))
+                    break
+                except ConnectionRefusedError:
+                    if time.time() - timeout_start > 5:
+                        raise Exception("Timeout while connecting to client socket")
+
+        #initialize receiving buffers
         self._buffer_recv = b''
         self._buffer_recv_index = 1
 
@@ -51,25 +63,29 @@ class SocketHandler:
         self._buffer_recv_index += 1
         return byte
 
-    def send_byte(self, byte):
+    def send_byte(self, byte, send_port):
+
+        #get relevant sending socket for port
+        sending_socket = self._socket_send[send_port]
 
         #Send buffer if current one is full.
-        if len(self._buffer_send) >= 1024:
-            self._socket_send.sendall(bytes(self._buffer_send))
-            self._buffer_send = bytearray()
+        if len(sending_socket.buffer) >= 1024:
+            sending_socket.object.sendall(bytes(sending_socket.buffer))
+            sending_socket.buffer = bytearray()
 
-        self._buffer_send.append(byte)
+        sending_socket.buffer.append(byte)
 
     #Perform socket cleanup
     def __del__(self):
 
         #Make sure remaining bytes are sent from buffer when program ends.
-        if len(self._buffer_send) > 0:
-            self._socket_send.sendall(bytes(self._buffer_send))
+        for sending_socket in self._socket_send.values():
+            if len(sending_socket.buffer) > 0:
+                sending_socket.object.sendall(bytes(sending_socket.buffer))
+            sending_socket.object.close()
 
         self._client_recv.close()
         self._socket_recv.close()
-        self._socket_send.close()
         
 
 
