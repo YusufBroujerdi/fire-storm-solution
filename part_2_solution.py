@@ -18,6 +18,13 @@ monitoring_port = 5745
 tcp_port = 5744
 udp_port = 5746
 
+ethernet_header_length = 14
+
+#value corresponding to tcp/udp in protocol field of ipv4 header
+tcp = 0x06
+udp = 0x11
+
+byte_counter = 0
 
 #Class to hold information about individual sending socket
 class SendSocket:
@@ -63,6 +70,9 @@ class SocketHandler:
     #Return next byte from stream, or None if stream is finished
     def get_byte(self):
 
+        global byte_counter
+        byte_counter += 1
+
         #Get a new buffer if current one has been fully read.
         if self._buffer_recv_index >= len(self._buffer_recv):
             self._buffer_recv = self._client_recv.recv(1024)
@@ -90,6 +100,11 @@ class SocketHandler:
             sending_socket.buffer = bytearray()
 
         sending_socket.buffer.append(byte)
+
+    def send_byte_on_ports(self, byte, send_ports):
+
+        for send_port in send_ports:
+            self.send_byte(byte, send_port)
 
     #Perform socket cleanup
     def __del__(self):
@@ -120,83 +135,7 @@ class PdfStringFragment:
     def __gt__(self, other):
         return self.sequence_number > other.sequence_number
 
-
-
-#To handle tracking whether recent bytes correspond to the substring CTFS.
-class CtfsChecker:
-
-    def __init__(self):
-        self.last_four_bytes = b''
-
-    #Returns whether last four bytes were CTFS. Also returns a byte to send
-    #that we were keeping to see if it became part of a valid bytestring.
-    def check_byte(self, byte):
-
-        # print(f'self.last_four_bytes type: {type(self.last_four_bytes)} value: {self.last_four_bytes}')
-        # print(f'byte parameter type: {type(byte)} value: {byte}')
-
-        self.last_four_bytes += byte
-
-        #if adding the new byte makes bytestring too long, we need to
-        #return the oldest character for sending.
-        if len(self.last_four_bytes) > 4:
-            old_byte = self.last_four_bytes[0]
-            self.last_four_bytes = self.last_four_bytes[1:]
-        else:
-            old_byte = None
-
-        if self.last_four_bytes == b'CTFS':
-            self.last_four_bytes = b''
-            return True, old_byte
-        else:
-            return False, old_byte
-
-    #I'll make sure leftover bytes are emptied before program ends
-    def __del__(self):
-        if self.last_four_bytes != b'':
-            raise Exception("You need to empty ctfs_checker of bytes")
-
-
-
-def deduce_sending_ports(byte_stream : SocketHandler):
-
-    sending_ports = []
-
-    #Get first byte of 6 byte destination mac address
-    destination_mac_address = byte_stream.get_byte()
-    #Get the other 5 bytes
-    for i in range(0, 5):
-        destination_mac_address += byte_stream.get_byte()
-
-    #Get first byte of 6 byte source mac address
-    source_mac_address = byte_stream.get_byte()
-    #Get the other 5 bytes
-    for i in range(0, 5):
-        source_mac_address += byte_stream.get_byte()
-
-    #If packet is going to a monitoring address, it should unconditionally
-    #be sent to monitoring port in addition to usual ports
-    if any(
-        [destination_mac_address[:3] == address_start
-        for address_start in monitoring_mac_address_starts]
-    ):
-        sending_ports.append(monitoring_port)
-
-    #If traffic is not from a malicious address, we can send it to the usual ports.
-    if all(
-        [source_mac_address[:3] != address_start
-        for address_start in malicious_mac_address_starts]
-    ):
-        #For the time being, I'll assume all traffic is tcp traffic
-        sending_ports.append(tcp_port)
-
-    #Before exiting function, send the bytes used to deduce ports.
-    for sending_port in sending_ports:
-        for byte in destination_mac_address + source_mac_address:
-            byte_stream.send_byte(byte, sending_port)
-
-    return sending_ports
-
+    
     
 #returns a CTFS packet, having confirmed the previous four bytes were a
 #valid CTFS string.
@@ -230,32 +169,83 @@ def extract_packet(byte_stream : SocketHandler):
 
 
 
+def validate_ip_packet(bytes):
+
+    ehl = ethernet_header_length
+
+    conditions = [
+        bytes[ehl - 2: ehl] == b'\x08\x00', #ethertype should be 0x0800 for ipv4
+        bytes[ehl] & 0xf0 == 0x40, #first 4 bits should be 4, for ipv4
+        bytes[ehl] & 0x0f == 0x05, #next 4 bits represent header length, assuming it's 5*32 bits
+    ]
+
+    for condition_index in range(len(conditions)):
+        if not conditions[condition_index]:
+            num = int.from_bytes(bytes, 'big')
+            raise Exception(f'Packet is not CTFS and fails condition {condition_index} for being an ethernet/ipv4 packet')
+
+
+def send_ip_packet(header, byte_stream : SocketHandler):
+
+    ehl = ethernet_header_length
+
+    #Compute bytes to send besides header. Note the ipv4 length includes the header.
+    ipv4_packet_length = int.from_bytes(header[ehl + 2: ehl + 4], 'big')
+    length_excluding_headers = ipv4_packet_length - 20
+
+    protocol = header[ehl + 9]
+
+    #Find mac addresses, for determining sending ports
+    destination_mac_address = header[:6]
+    source_mac_address = header[6:12]
+    sending_ports = []
+
+    if destination_mac_address[:3] in monitoring_mac_address_starts:
+        sending_ports.append(monitoring_port)
+
+    if source_mac_address[:3] not in malicious_mac_address_starts:
+        if protocol == tcp:
+            sending_ports.append(tcp_port)
+        elif protocol == udp:
+            sending_ports.append(udp_port)
+
+    for byte in header:
+        #Note this call simply does nothing if sending_ports is empty
+        byte_stream.send_byte_on_ports(byte, sending_ports)
+
+    for i in range(length_excluding_headers):
+        byte = int.from_bytes(byte_stream.get_byte(), 'big')
+        byte_stream.send_byte_on_ports(byte, sending_ports)
+
+
 def main():
 
     byte_stream = SocketHandler()
-    ctfs_checker = CtfsChecker()
-    byte = byte_stream.get_byte()
     pdf_fragments = dict()
-    
-    while byte is not None:
 
-        packet_found, byte_to_send = ctfs_checker.check_byte(byte)
+    while True:
 
-        if byte_to_send is not None:
-            byte_stream.send_byte(byte_to_send)
+        first_packet_byte = byte_stream.get_byte()
+        if first_packet_byte is None:
+            break
 
-        if packet_found:
+        first_four_bytes = first_packet_byte
+        for i in range(3):
+            first_four_bytes += byte_stream.get_byte()
+
+        if first_four_bytes == b'CTFS':
             fragment = extract_packet(byte_stream)
             if fragment.file_id not in pdf_fragments.keys():
                 pdf_fragments[fragment.file_id] = []
             pdf_fragments[fragment.file_id].append(fragment)
+            continue
 
-        byte = byte_stream.get_byte()
+        first_34_bytes = first_four_bytes
+        for i in range(30):
+            first_34_bytes += byte_stream.get_byte()
 
-    #Make sure remaining bytes are sent
-    for byte in ctfs_checker.last_four_bytes:
-        byte_stream.send_byte(byte)
-    ctfs_checker.last_four_bytes = b''
+        validate_ip_packet(first_34_bytes)
+        send_ip_packet(first_34_bytes, byte_stream)
 
     #sort by sequence number, using magic method in PdfStringFragment class
     for file_fragments in pdf_fragments.values():
@@ -266,7 +256,6 @@ def main():
         with open(f'{file_id}.pdf', 'wb') as pdf_file:
             for fragment in file_fragments:
                 pdf_file.write(fragment.payload)
-
 
 
 if __name__ == '__main__':
