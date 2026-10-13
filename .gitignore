@@ -1,3 +1,4 @@
 *.txt
 __pycache__*
 *.pdf
+packet_analysis/**
