@@ -30,24 +30,34 @@ debug_files := $(debug_solution_1) $(debug_solution_2)
 
 solutions: $(solution_files) .depend
 
+solution_1: $(solution_1)
 $(solution_1): $(stage_1_object_files)
+	@ mkdir -p $(apps_dir)
 	$(CC) $(CFLAGS) $(stage_1_object_files) -o $@
 
+solution_2: $(solution_2)
 $(solution_2): $(stage_2_object_files)
+	@ mkdir -p $(apps_dir)
 	$(CC) $(CFLAGS) $(stage_2_object_files) -o $@
 
 $(build_dir)/%.o: $(source_dir)/%.c
+	@ mkdir -p $(build_dir)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 debug: $(debug_files) .depend
 
+debug_solution_1: $(debug_solution_1)
 $(debug_solution_1): $(stage_1_debug_object_files)
+	@ mkdir -p $(debug_dir)
 	$(CC) $(DEBUGFLAGS) $(stage_1_debug_object_files) -o $@
 
+debug_solution_2: $(debug_solution_2)
 $(debug_solution_2): $(stage_2_debug_object_files)
+	@ mkdir -p $(debug_dir)
 	$(CC) $(DEBUGFLAGS) $(stage_2_debug_object_files) -o $@
 
 $(debug_build_dir)/%.o: $(source_dir)/%.c
+	@ mkdir -p $(debug_build_dir)
 	$(CC) $(DEBUGFLAGS) -c $< -o $@
 
 .depend: $(source_files)
@@ -60,6 +70,6 @@ include .depend
 clean:
 	rm -fdr build
 	rm -fdr build-debug
-	rm -fdr debug/*
-	rm -fdr apps/*
+	rm -fdr debug
+	rm -fdr apps
 	rm -f .depend
