@@ -1,5 +1,5 @@
 CFLAGS := -Wall -O3 -std=gnu11
-DEBUGFLAGS := -Wall -std=gnu11 -fsanitize=address -g
+DEBUGFLAGS := -Wall -std=gnu11 -g #-fsanitize=address
 CC := gcc
 
 source_dir := src
@@ -9,11 +9,13 @@ apps_dir := apps
 debug_build_dir := build-debug
 debug_dir := debug
 
+#Source and object files are automatically found.
 source_files := $(shell find $(source_dir) -name '*.c')
 header_files := $(shell find $(header_dir) -name '*.h')
 object_files := $(patsubst $(source_dir)/%.c,$(build_dir)/%.o,$(source_files))
 debug_object_files := $(patsubst $(source_dir)/%.c,$(debug_build_dir)/%.o,$(source_files))
 
+#Creates separate object lists for each executable via a filter on the name
 filter_out_stage = $(patsubst $(dir $(firstword $(2)))stage_$(1)_%.o,, $(2))
 stage_1_object_files := $(call filter_out_stage,2,$(object_files))
 stage_2_object_files := $(call filter_out_stage,1,$(object_files))

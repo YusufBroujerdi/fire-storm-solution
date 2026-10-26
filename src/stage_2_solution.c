@@ -1,10 +1,8 @@
 #include <arpa/inet.h>
-#include <errno.h>
 #include <sys/socket.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include <unistd.h>
 
 #include "../headers/socket_management.h"
@@ -40,7 +38,7 @@ const unsigned char monitoring_mac_address_starts[3][3] = {
 //It would make debugging easier if our program fails on future cases.
 void validate_ip_packet(unsigned char *header) {
 
-  unsigned char condition, ehl;
+  unsigned char ehl;
 
   ehl = ETHERNET_HEADER_LENGTH;
 
@@ -116,7 +114,7 @@ void send_ip_packet(
 
   //Send packet payload
   for (i = 0; i < length_excl_headers; i++) {
-    byte = get_byte(receiving_socket);
+    byte = get_non_EOF_byte(receiving_socket);
     send_byte_on_sockets(active_sockets, active_socket_index, byte);
   }  
 }
@@ -167,7 +165,7 @@ void get_pdf_file() {
   construct_pdf_files(&pdf_manager);
 
   //Clean up sockets and memory allocations.
-  cleanup_manager(&pdf_manager);
+  cleanup_pdf_manager(&pdf_manager);
   for (i = 0; i < 3; i++)
     cleanup_sending_socket(&sending_socket[i]);
   cleanup_receiving_socket(&receiving_socket);
@@ -177,5 +175,6 @@ void get_pdf_file() {
 
 int main() {
 
+  get_pdf_file();
   return 0;
 }

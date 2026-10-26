@@ -9,6 +9,7 @@
 
 //Useful for logic
 unsigned char ctfs[4] = {'C', 'T', 'F', 'S'};
+uint8_t use_checksum = 0;
 
 //Our strategy is to add a new interface layer for handling multiple file
 //ids at once, building off the existing code for handling pdf fragments.
@@ -59,7 +60,6 @@ struct PdfManager initialize_pdf_manager() {
 void extend_handler_storage(struct PdfManager *manager) {
 
   struct PdfFileIdHandler *new_handler_storage;
-  uint64_t new_storage_size;
 
   new_handler_storage = realloc(
     manager->pdf_handlers,
@@ -129,6 +129,7 @@ void extract_ctfs_packet_stage_2(
   //assuming network is big endian and host is little endian also seems reasonable.
   sequence_number = ntohs(*((uint16_t *) &ctfs_header.sequence_bytes));
   length = ntohs(*((uint16_t *) &ctfs_header.length_bytes));
+  file_id = ctfs_header.file_id;
 
   //Make an aligned copy of the checksum before operating on it.
   memcpy(&checksum, &ctfs_header.checksum_bytes, 4);
@@ -144,8 +145,9 @@ void extract_ctfs_packet_stage_2(
     if (manager->number_of_handlers == manager->max_number_of_handlers) 
       extend_handler_storage(manager);
 
-    //Allocate handler from available handlers.
+    //Allocate handler from available handlers, and initialize it for usage.
     handler = &manager->pdf_handlers[manager->number_of_handlers++];
+    *handler = initialize_file_id_handler(file_id);
 
     //Make sure address is set in handler addresses going forward
     manager->pdf_address_by_file_id[ctfs_header.file_id] = handler;
@@ -192,6 +194,6 @@ void extract_ctfs_packet_stage_2(
   }
 
   //If we're using the checksum and it's incorrect, discard fragment by resetting index.
-  if (UseChecksum && checksum != accumulator)
+  if (use_checksum && checksum != accumulator)
     handler->fragment_index--;
 }

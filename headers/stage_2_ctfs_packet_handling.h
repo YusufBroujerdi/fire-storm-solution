@@ -30,12 +30,12 @@ union Word {
   uint8_t data[4];
 };
 
-extern uint8_t UseChecksum;
+extern uint8_t use_checksum;
 extern unsigned char ctfs[4];
 
 struct PdfManager initialize_pdf_manager();
 void construct_pdf_files(struct PdfManager *manager);
-void cleanup_manager(struct PdfManager *manager);
+void cleanup_pdf_manager(struct PdfManager *manager);
 void extract_ctfs_packet_stage_2(
   struct PdfManager *manager,
   struct RecvSocket *byte_stream
