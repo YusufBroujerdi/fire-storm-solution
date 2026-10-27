@@ -18,7 +18,7 @@ struct PdfFileIdHandler {
   unsigned char *payload_storage;
   struct PdfFragment *fragments;
   uint64_t payload_storage_size;
-  uint64_t fragments_size;
+  uint64_t fragment_max_index;
   uint64_t payload_storage_index;
   uint64_t fragment_index;
   unsigned char file_id;

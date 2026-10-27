@@ -1,5 +1,5 @@
 CFLAGS := -Wall -O3 -std=gnu11
-DEBUGFLAGS := -Wall -std=gnu11 -g #-fsanitize=address
+DEBUGFLAGS := -Wall -std=gnu11 -g -fsanitize=address
 CC := gcc
 
 source_dir := src

@@ -12,7 +12,7 @@ struct PdfFileIdHandler initialize_file_id_handler(unsigned char file_id) {
 
   unsigned char *payload_storage;
   struct PdfFragment *fragments;
-  uint64_t payload_storage_size, fragments_size;
+  uint64_t payload_storage_size, fragments_size, fragment_max_index;
 
   //32MiB seems reasonable for a pdf. But we will make provisions for
   //extending the payload if necessary. Same for the fragments.
@@ -24,7 +24,8 @@ struct PdfFileIdHandler initialize_file_id_handler(unsigned char file_id) {
   }
 
   //256 fragments seems like a reasonable soft bound.
-  fragments_size = 256 * sizeof(struct PdfFragment); 
+  fragment_max_index = 256;
+  fragments_size = fragment_max_index * sizeof(struct PdfFragment); 
   fragments = malloc(fragments_size);
   if (fragments == NULL) {
     printf("allocating storage for pdf fragments failed\n");
@@ -37,7 +38,7 @@ struct PdfFileIdHandler initialize_file_id_handler(unsigned char file_id) {
     .payload_storage_size = payload_storage_size,
     .fragments = fragments,
     .fragment_index = 0,
-    .fragments_size = fragments_size,
+    .fragment_max_index = fragment_max_index,
     .file_id = file_id
   };
 
@@ -71,7 +72,7 @@ void extend_fragments_storage(struct PdfFileIdHandler *file_id_handler) {
   
   new_fragments_storage = realloc(
     file_id_handler->fragments,
-    file_id_handler->fragments_size * 2 * sizeof(struct PdfFragment)
+    file_id_handler->fragment_max_index * 2 * sizeof(struct PdfFragment)
   );
   if (new_fragments_storage == NULL) {
     printf("Attempt to extend fragment storage failed.\n");
@@ -79,7 +80,7 @@ void extend_fragments_storage(struct PdfFileIdHandler *file_id_handler) {
   }
 
   file_id_handler->fragments = new_fragments_storage;
-  file_id_handler->fragments_size *= 2;
+  file_id_handler->fragment_max_index *= 2;
 }
 
 
@@ -203,7 +204,7 @@ void extract_ctfs_packet(
   uint16_t sequence_number, length;
   struct PdfFragment *new_fragment;
 
-  if (handler->fragment_index == handler->fragments_size)
+  if (handler->fragment_index == handler->fragment_max_index)
     extend_fragments_storage(handler);
 
   //Read the sequence and length bytes from stream.
