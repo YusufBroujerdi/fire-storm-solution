@@ -68,8 +68,8 @@ void send_ip_packet(
 ) {
   
   struct SendSocket *active_sockets[4];
-  uint16_t ipv4_packet_length, length_excl_headers, ehl;
-  unsigned char protocol, destination_mac_address[6], source_mac_address[6], i,
+  uint16_t ipv4_packet_length, length_excl_headers, ehl, i;
+  unsigned char protocol, destination_mac_address[6], source_mac_address[6],
   non_malicious_mac_address, active_socket_index, byte;
 
   ehl = ETHERNET_HEADER_LENGTH;
