@@ -16,12 +16,13 @@ uint8_t use_checksum = 0;
 struct PdfManager initialize_pdf_manager() {
 
   struct PdfFileIdHandler **addresses_by_file_id, *file_id_handlers;
-  uint64_t addresses_by_file_id_size, file_id_handlers_size;
+  uint64_t addresses_by_file_id_size;
+  uint16_t max_number_of_handlers;
 
   //Allocate storage for PdfFileIdHandlers. 32 pdf files seems like
   //a reasonable upper bound which can be extended later if necessary.
-  file_id_handlers_size = 32 * sizeof(struct PdfFileIdHandler);
-  file_id_handlers = malloc(file_id_handlers_size);
+  max_number_of_handlers = 32;
+  file_id_handlers = malloc(max_number_of_handlers * sizeof(struct PdfFileIdHandler));
   if (file_id_handlers == NULL) {
     printf("allocating storage for file id handlers failed\n");
     exit(-1);
@@ -29,7 +30,7 @@ struct PdfManager initialize_pdf_manager() {
 
   //Since the protocol only provides one byte for file id, we know
   //the file id will always be between 0 and 255. We can maintain
-  //an array of 255 pointers to PdfFileIdHandlers to ensure finding
+  //an array of 256 pointers to PdfFileIdHandlers to ensure finding
   //the handler of a file id remains fast, without resorting to
   //implementing a hash table or binary search tree.
   addresses_by_file_id_size = 256 * sizeof(struct PdfFileIdHandler *);
@@ -49,7 +50,7 @@ struct PdfManager initialize_pdf_manager() {
     .pdf_handlers = file_id_handlers,
     .pdf_address_by_file_id = addresses_by_file_id,
     .number_of_handlers = 0,
-    .max_number_of_handlers = 32
+    .max_number_of_handlers = max_number_of_handlers
   };
 
   return manager;
@@ -153,7 +154,7 @@ void extract_ctfs_packet_stage_2(
     manager->pdf_address_by_file_id[ctfs_header.file_id] = handler;
   }
 
-  if (handler->fragment_index == handler->fragments_size)
+  if (handler->fragment_index == handler->fragment_max_index)
     extend_fragments_storage(handler);
 
   new_fragment = handler->fragments + handler->fragment_index++;
