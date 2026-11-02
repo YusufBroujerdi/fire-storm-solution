@@ -22,14 +22,6 @@ struct SendSocket {
 
 
 
-//Helper struct for handling multiple sending sockets.
-struct SendSocketList {
-    struct SendSocket *socket;
-    struct SendSocketList *next;
-};
-
-
-
 struct RecvSocket initialize_receiving_socket();
 struct SendSocket initialize_sending_socket();
 struct SendSocket initialize_sending_socket_on_port(uint16_t port);

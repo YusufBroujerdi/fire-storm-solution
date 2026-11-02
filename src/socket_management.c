@@ -19,8 +19,9 @@
 //This can be adapted later if necessary.
 #define LISTEN_BACKLOG 1
 
-//common buffer size for sending / receiving bytes
-#define BUFFER_SIZE 1024
+//An optimal buffer size may be estimated via the bandwidth-delay product.
+//Since we don't know this, 16KiB seems like a modest-enough choice.
+#define BUFFER_SIZE 1024 * 16
 
 
 
@@ -72,6 +73,12 @@ struct RecvSocket initialize_receiving_socket() {
 
   client_fd = accept(socket_fd, NULL, NULL);
 
+  //It's possible for accept to return -1 due to a signal interrupt. But in
+  //practice this never happens in our program since on linux all signals
+  //terminate the program, stop/resume it, or are ignored by default. We
+  //could only get errno EINTR if we've defined custom signal behaviour,
+  //which we haven't bothered with. I've tested this with pkill on different
+  //signal numbers. This should also extrapolate to other blocking syscalls.
   if (client_fd == -1) {
     printf("Invalid client file descriptor returned.\n");
     exit(-1);
@@ -263,17 +270,6 @@ void send_byte(struct SendSocket *sending_socket, unsigned char byte_to_send) {
 
   //Add byte to send to buffer and increment buffer index.
   sending_socket->buffer[sending_socket->buffer_index++] = byte_to_send;
-}
-
-
-
-
-void send_byte_on_socket_list(struct SendSocketList *sockets, unsigned char byte) {
-
-  struct SendSocketList *socket_list;
-
-  for (socket_list = sockets; socket_list != NULL; socket_list = socket_list->next)
-    send_byte(socket_list->socket, byte);
 }
 
 
