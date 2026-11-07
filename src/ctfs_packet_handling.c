@@ -152,12 +152,14 @@ void quicksort_fragments(
 
 
 
-void assemble_pdf_from_fragments(struct PdfFileIdHandler *file_id_handler) {
+void assemble_pdf_from_fragments(
+  struct PdfFileIdHandler *file_id_handler,
+  char *pdf_file_name
+) {
 
   FILE *file;
   struct PdfFragment *fragment;
   unsigned char *byte, *end_byte;
-  char pdf_file_name[8];
 
   //Sort fragments by sequence number.
   quicksort_fragments(
@@ -165,8 +167,6 @@ void assemble_pdf_from_fragments(struct PdfFileIdHandler *file_id_handler) {
     file_id_handler->fragment_index
   );
 
-  //Construct pdf file name, which must be at most 7 chars long.
-  sprintf(pdf_file_name, "%d.pdf", file_id_handler->file_id);
   //Prepare to write to file
   file = fopen(pdf_file_name, "w");
   if (file == NULL) {

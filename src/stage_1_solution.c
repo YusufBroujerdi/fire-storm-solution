@@ -107,7 +107,7 @@ void get_pdf_file() {
     send_byte(&sending_socket, last_four_bytes.bytes[index]);
   }
 
-  assemble_pdf_from_fragments(&file_id_handler);
+  assemble_pdf_from_fragments(&file_id_handler, "stage_1_solution.pdf");
 
   cleanup_sending_socket(&sending_socket);
   cleanup_receiving_socket(&receiving_socket);

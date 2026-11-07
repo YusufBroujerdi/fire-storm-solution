@@ -79,8 +79,18 @@ void extend_handler_storage(struct PdfManager *manager) {
 
 void construct_pdf_files(struct PdfManager *manager) {
 
-  for (uint16_t i = 0; i < manager->number_of_handlers; i++)
-    assemble_pdf_from_fragments(&manager->pdf_handlers[i]);
+  char pdf_file_name[8];
+  struct PdfFileIdHandler *file_id_handler;
+
+  for (uint16_t i = 0; i < manager->number_of_handlers; i++) {
+
+    file_id_handler = &manager->pdf_handlers[i];
+
+    //Construct pdf file name from file id.
+    sprintf(pdf_file_name, "%d.pdf", file_id_handler->file_id);
+
+    assemble_pdf_from_fragments(file_id_handler, pdf_file_name);
+  }
 }
 
 

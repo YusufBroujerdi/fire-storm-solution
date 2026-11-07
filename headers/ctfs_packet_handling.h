@@ -36,5 +36,8 @@ void extract_ctfs_packet(
 );
 
 void quicksort_fragments(struct PdfFragment *fragments, uint32_t length);
-void assemble_pdf_from_fragments(struct PdfFileIdHandler *file_id_handler);
+void assemble_pdf_from_fragments(
+  struct PdfFileIdHandler *file_id_handler,
+  char *pdf_file_name
+);
 void cleanup_file_id_handler(struct PdfFileIdHandler *file_id_handler);
