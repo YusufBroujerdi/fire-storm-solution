@@ -43,18 +43,18 @@ void validate_ip_packet(unsigned char *header) {
   ehl = ETHERNET_HEADER_LENGTH;
 
   if (ntohs(* (uint16_t *) &header[ehl - 2]) != 0x0800) {
-    printf("Error. Ethernet header's ethertype should always be 0x0800, indicating ipv4.");
+    printf("Error. Ethernet header's ethertype should always be 0x0800, indicating ipv4.\n");
     exit(-1);
   }
 
   if ((header[ehl] & 0xf0) != 0x40) {
-    printf("Error. First four bits of ipv4 header should be 4, indicating ipv4.");
+    printf("Error. First four bits of ipv4 header should be 4, indicating ipv4.\n");
     exit(-1);
   }
 
   if ((header[ehl] & 0x0f) != 0x05) {
     printf("Error. Second four bits of ipv4 header should be 5, indicating header length is 20 bytes.\
-            Program assumes struct ip_header length is fixed.");
+            Program assumes struct ip_header length is fixed.\n");
     exit(-1);
   }
 }
@@ -173,8 +173,23 @@ void get_pdf_file() {
 
 
 
-int main() {
+int main(int argc, char **argv) {
 
+  //Handle command line arguments
+  if (argc > 2) {
+    printf("Only accepts one flag, --checksum\n");
+    exit(-1);
+  }
+  else if (argc == 2 && strcmp(argv[1], "--checksum") != 0) {
+    printf("Invalid flag given. Only accepts --checksum\n");
+    exit(-1);
+  }
+  else if (argc == 2)
+    use_checksum = 1;
+  else
+    use_checksum = 0;
+
+  //Begin program
   get_pdf_file();
   return 0;
 }
