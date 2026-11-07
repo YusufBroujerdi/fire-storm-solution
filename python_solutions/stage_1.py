@@ -180,7 +180,7 @@ def main():
     pdf_fragments.sort()
 
     #write ordered PdfStringFragment payloads to file
-    with open('test.pdf', 'wb') as pdf_file:
+    with open('stage_1_solution.pdf', 'wb') as pdf_file:
         for fragment in pdf_fragments:
             pdf_file.write(fragment.payload)
 

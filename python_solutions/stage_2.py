@@ -24,8 +24,6 @@ ethernet_header_length = 14
 tcp = 0x06
 udp = 0x11
 
-byte_counter = 0
-
 #Class to hold information about individual sending socket
 class SendSocket:
     def __init__(self, socket_send):
@@ -69,9 +67,6 @@ class SocketHandler:
 
     #Return next byte from stream, or None if stream is finished
     def get_byte(self):
-
-        global byte_counter
-        byte_counter += 1
 
         #Get a new buffer if current one has been fully read.
         if self._buffer_recv_index >= len(self._buffer_recv):
@@ -135,6 +130,62 @@ class PdfStringFragment:
     def __gt__(self, other):
         return self.sequence_number > other.sequence_number
 
+
+
+#Object for managing CTFS checksum while receiving bytes
+class CheckSumState:
+
+    #Initialize checksum
+    def __init__(self):
+
+        self.partial_word = b''
+        self.checksum = 0
+
+
+    #Ingest byte, adding new 4-byte integer to checksum if applicable
+    def add_byte(self, byte):
+
+        self.partial_word += byte
+
+        #If we have full 4 byte word, add it to checksum
+        if len(self.partial_word) == 4:
+
+            #Add four byte word to checksum ignoring any carry
+            self.checksum += int.from_bytes(self.partial_word, 'big')
+            self.checksum %= 1 << 32
+
+            #Rotate accumulator 1 bit to the left
+            leftmost_bit = self.checksum & (1 << 31)
+            self.checksum = (self.checksum << 1) + (leftmost_bit != 0)
+            self.checksum %= 1 << 32
+
+            # global print_counter
+            # print_counter += 1
+            # if print_counter < 100:
+                # print(f"current checksum value: {hex(self.checksum)}")
+
+            #Reset 4-byte word
+            self.partial_word = b''
+
+
+    #Helper which can ingest multiple bytes at once
+    def add_bytes(self, bytes):
+
+        for byte_index in range(len(bytes)):
+            #The below line is necessary due to how indexing bytestrings in python works.
+            valid_index = slice(byte_index, byte_index + 1)
+            self.add_byte(bytes[valid_index])
+
+
+    #Add any leftover words to checksum and return final result
+    def final_value(self):
+
+        #Make sure leftover partial words have been padded with zeros and added.
+        while len(self.partial_word) != 0:
+            self.add_byte(b'\x00')
+
+        return self.checksum
+
     
     
 #returns a CTFS packet, having confirmed the previous four bytes were a
@@ -155,17 +206,40 @@ def extract_packet(byte_stream : SocketHandler):
     file_id_byte = byte_stream.get_byte()
     file_id = int.from_bytes(file_id_byte, 'big')
 
-    #Header including CTFS string is 16 bytes. Discard the remaining 8 bytes.
-    for i in range(0, 7):
-        byte_stream.get_byte()
+    #Checksum field
+    checksum_bytes = byte_stream.get_byte()
+    checksum_bytes += byte_stream.get_byte()
+    checksum_bytes += byte_stream.get_byte()
+    checksum_bytes += byte_stream.get_byte()
+    checksum_target = int.from_bytes(checksum_bytes, 'big')
+
+    #discard padding bytes, which are always 0x00
+    byte_stream.get_byte()
+    byte_stream.get_byte()
+    byte_stream.get_byte()
+
+    #initialize checksum and add header bytes
+    checksum = CheckSumState()
+    checksum.add_bytes(
+        b'CTFS'
+        + sequence_bytes
+        + length_bytes
+        + file_id_byte
+        + b'CTFS' #Checksum bytes should be replaced with CTFS
+        + b'\x00\x00\x00' #Padding bytes are always 0x00
+    )
 
     #We can use the length number to find the pdf payload.
     payload = bytearray()
     for i in range(0, length):
-        byte = int.from_bytes(byte_stream.get_byte(), 'big')
-        payload.append(byte)
+        byte = byte_stream.get_byte()
+        checksum.add_byte(byte)
+        payload.append(int.from_bytes(byte, 'big'))
 
-    return PdfStringFragment(sequence_number, bytes(payload), file_id)
+    if checksum.final_value() == checksum_target:
+        return PdfStringFragment(sequence_number, bytes(payload), file_id)
+    else:
+        return PdfStringFragment(sequence_number, bytearray(), file_id)
 
 
 
