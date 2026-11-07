@@ -67,7 +67,7 @@ void extend_handler_storage(struct PdfManager *manager) {
     manager->max_number_of_handlers * 2 * sizeof(struct PdfFileIdHandler)
   );
   if (new_handler_storage == NULL) {
-    printf("Failed to allocate more storage for PdfFileIdHandlers");
+    printf("Failed to allocate more storage for PdfFileIdHandlers\n");
     exit(-1);
   }
 
@@ -106,11 +106,12 @@ void cleanup_pdf_manager(struct PdfManager *manager) {
 
 
 
-void accumulate_checksum(uint32_t *accumulator, uint32_t word) {
+void accumulate_checksum(uint32_t *accumulator, uint32_t network_word) {
 
   uint8_t leftmost_bit;
 
-  *accumulator += word;
+  //The function assumes the word hasn't been rewritten in host order yet.
+  *accumulator += ntohl(network_word);
   leftmost_bit = (*accumulator & 0x80000000) != 0;
   *accumulator = *accumulator << 1 | leftmost_bit;
 }
@@ -188,7 +189,7 @@ void extract_ctfs_packet_stage_2(
     //We can figure out whether the word is complete using the payload index mod 4.
     word.data[n % 4] = next_byte;
     if (n % 4 == 3) {
-      accumulate_checksum(&checksum, word.whole_word);
+      accumulate_checksum(&accumulator, word.whole_word);
     }
 
     handler->payload_storage[handler->payload_storage_index++] = next_byte;
@@ -201,7 +202,7 @@ void extract_ctfs_packet_stage_2(
     for (i = length % 4; i % 4 != 0; i++)
       word.data[i] = 0;
 
-    accumulate_checksum(&checksum, word.whole_word);
+    accumulate_checksum(&accumulator, word.whole_word);
   }
 
   //If we're using the checksum and it's incorrect, discard fragment by resetting index.
