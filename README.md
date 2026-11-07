@@ -1,6 +1,15 @@
 ## Build and Validation Instructions ##
 
-### Stage 1 Solution
+### Dependencies ###
+
+The only dependencies are gcc and make. If not already installed, they can be installed via the following commands on Ubuntu:
+
+```sh
+sudo apt install make
+sudo apt install gcc
+```
+
+### Stage 1 Solution ###
 
 To build, run "make" in the project root directory.
 
@@ -66,7 +75,7 @@ cd ./apps
 For the sake of personal enjoyment and demonstrating technical understanding, I completely refrained from using LLMs for research, code generation
 or anything else. I made prototypes in Python to break down the problem.
 
-If it's of interest, the directory python_solutions contains these prototypes.
+If it's of interest, the directory python_solutions contains these prototypes. No special python packages are required to run them.
 
 ```sh
 #From project root
